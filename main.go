@@ -1,29 +1,42 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 )
 
 func main() {
-	l, err := net.Listen("tcp", ":8080")
+	if len(os.Args) < 2 {
+		printUsage()
+		return
+	}
+
+	listenAddr := "0.0.0.0:9000"
+	if len(os.Args) > 2 {
+		listenAddr = os.Args[2]
+	}
+
+	l, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		panic(err)
 	}
+
+	log.Printf("listening at %s\n", listenAddr)
 
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			log.Println(err)
 		}
-
 		go Dial(c)
 	}
 }
 
 func Dial(source net.Conn) {
-	target, err := net.Dial("tcp", "127.0.0.1:5432")
+	target, err := net.Dial("tcp", os.Args[1])
 	if err != nil {
 		log.Printf("dial err: %v", err)
 		return
@@ -44,7 +57,7 @@ func Stream(source, target net.Conn, from string) {
 			log.Printf("read from %s err: %v", from, err)
 			return
 		}
-		log.Println(from + ":" + b.String())
+		log.Println(from + ":\n" + b.String())
 		_, err = b.WriteTo(target)
 		if err != nil {
 			log.Printf("write from %s err: %v", from, err)
@@ -81,4 +94,21 @@ func (b *Buffer) WriteTo(w io.Writer) (n int, err error) {
 
 func (b *Buffer) String() string {
 	return string(b.buf[0:b.lastRead])
+}
+
+func printUsage() {
+	fmt.Println(`
+proprint
+
+usage: proprint <dest-addr> <list-addr>
+
+dest-addr: service or destination address that you want to use
+list-addr: new port or addr that you want to listen to (optional)
+           by default it will listen at 0.0.0.0:9000
+
+example:
+
+# proxy to postgres service
+proprint 127.0.0.1:5432 :9000
+`)
 }
